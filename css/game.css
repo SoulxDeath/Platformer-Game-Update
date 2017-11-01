@@ -1,0 +1,19 @@
+.background    {
+                 table-layout: fixed;
+                 border-spacing: 0;
+                 background: url(caves-background-5.jpg) grey;
+                 background-size: contain;
+                 }
+.background td { padding: 0; }
+.lava          { background: #3c5969; }
+.wall          { background: #101e1f;   }
+.floater       { background: #b0d7de;   }
+.actor         { position: absolute;  }
+.user          { background: blue;   }
+.coin          { background: yellow;}
+.game {
+  position: relative;
+  max-height: 600px;
+  max-width: 450px;
+  overflow: hidden;
+}
