@@ -72,6 +72,7 @@ Vector.prototype.times = function(factor)
 function User(pos)
 {
   this.pos = pos.plus(new Vector(0, -0.5));
+  this.initPos = new Vector(this.pos.x, this.pos.y);
   this.size = new Vector(0.8, 1.5);
   this.speed = new Vector(0,0);
 }
@@ -177,26 +178,73 @@ DOMDisplay.prototype.scrollUserIntoView = function()
     this.wrap.scrollTop = center.y + margin - height;
 };
 
-Level.prototype.obstacleAt = function(pos,size)
+Level.prototype.isWallAt = function(pos,size)
 {
   var xStart = Math.floor(pos.x);
   var xEnd = Math.ceil(pos.x + size.x);
   var yStart = Math.floor(pos.y);
-  var yEnd = (Math.ceil(pos.y + size.y));
+  var yEnd = Math.ceil(pos.y + size.y);
 
   if(xStart < 0 || xEnd >this.width || yStart < 0 || yEnd > this.height)
-    return 'wall';
-  if (yEnd > this.height)
-    return "lava";
+    return true;
 
   for(var y = yStart; y< yEnd; y++)
   {
     for(var x = xStart; x < xEnd; x++)
     {
       var fieldType = this.grid[y][x];
-      if(fieldType)
+      if(fieldType == 'wall')
       {
-        return fieldType;
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+Level.prototype.isLavaAt = function(pos,size)
+{
+  var xStart = Math.floor(pos.x);
+  var xEnd = Math.ceil(pos.x + size.x);
+  var yStart = Math.floor(pos.y);
+  var yEnd = Math.ceil(pos.y + size.y);
+
+  if (yEnd > this.height)
+    return true;
+
+  for(var y = yStart; y< yEnd; y++)
+  {
+    for(var x = xStart; x < xEnd; x++)
+    {
+      var fieldType = this.grid[y][x];
+      if(fieldType == 'lava')
+      {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+function collectCoins(pos, size)
+{
+  var xStart = Math.floor(pos.x);
+  var xEnd = Math.ceil(pos.x + size.x);
+  var yStart = Math.floor(pos.y);
+  var yEnd = Math.ceil(pos.y + size.y);
+
+  if (yEnd > this.height)
+    return true;
+
+  for(var y = yStart; y< yEnd; y++)
+  {
+    for(var x = xStart; x < xEnd; x++)
+    {
+      var fieldType = this.grid[y][x];
+      if(fieldType == 'coin')
+      {
+        this.score++;   //Not working yet
+        coin.remove;    //Not working yet
       }
     }
   }
@@ -228,36 +276,38 @@ User.prototype.moveX = function(step, level, keys)
 
   var motion = new Vector(this.speed.x * step, 0);
   var newPos = this.pos.plus(motion);
-  var obstacle = level.obstacleAt(newPos, this.size);
-  if(obstacle != 'wall')
+  var obstacle = level.isWallAt(newPos, this.size);
+  if(obstacle == false)
     this.pos = newPos;
 };
 
 var gravity = 50;
-var jumpSpeed = 17;
-var userYSpeed = 7;
+var jumpSpeed = 20;
+
 
 User.prototype.moveY = function(step, level, keys)
 {
   this.speed.y += step * gravity;
   var motion = new Vector(0, this.speed.y * step);
   var newPos = this.pos.plus(motion);
-  var obstacle = level.obstacleAt(newPos, this.size);
-  
-  if(obstacle == 'wall')
+  var obstacle = level.isWallAt(newPos, this.size);
+  var lava = level.isLavaAt(newPos, this.size);
+
+  if(obstacle == true)
   {
-  if (keys.up && this.speed.y > 0)
-    this.speed.y = -jumpSpeed;
-  else
-      this.speed.y = 0;
+    if (keys.up && this.speed.y > 0)
+      this.speed.y = -jumpSpeed;
+    else
+        this.speed.y = 0;
   }
   else
   {
     this.pos = newPos;
   }
 
-  if (obstacle == "lava" && this.status == null)
+  if (lava == true && this.status == null)
   {
+    this.pos = new Vector(this.initPos.x, this.initPos.y);
     this.status = "lost";
     this.finishDelay = 1;
   }
@@ -268,69 +318,14 @@ User.prototype.act = function(step, level, keys)
   this.moveX(step, level, keys);
   this.moveY(step, level, keys);
 
+  //collectCoins(this.pos);
+
   // Losing animation
   if (level.status == "lost") {
     this.pos.y += step;
     this.size.y -= step;
   }
 };
-
-
-/*
-function Lava(pos, ch) {
-  this.pos = pos;
-  this.size = new Vector(1, 1);
-  if (ch == "=") {
-    this.speed = new Vector(2, 0);
-  } else if (ch == "|") {
-    this.speed = new Vector(0, 2);
-  } else if (ch == "v") {
-    this.speed = new Vector(0, 3);
-    this.repeatPos = pos;
-  }
-}
-Lava.prototype.type = "lava";
-
-Lava.prototype.act = function(step, level) {
-  var newPos = this.pos.plus(this.speed.times(step));
-  if (!level.obstacleAt(newPos, this.size))
-    this.pos = newPos;
-  else if (this.repeatPos)
-    this.pos = this.repeatPos;
-  else
-    this.speed = this.speed.times(-1);
-};
-
-
-Level.prototype.actorAt = function(actor) {
-  for (var i = 0; i < this.actors.length; i++) {
-    var other = this.actors[i];
-    if (other != actor &&
-        actor.pos.x + actor.size.x > other.pos.x &&
-        actor.pos.x < other.pos.x + other.size.x &&
-        actor.pos.y + actor.size.y > other.pos.y &&
-        actor.pos.y < other.pos.y + other.size.y)
-      return other;
-  }
-};
-
-Level.prototype.playerTouched = function(type, actor) {
-  if (type == "lava" && this.status == null) {
-    this.status = "lost";
-    this.finishDelay = 1;
-  } else if (type == "coin") {
-    this.actors = this.actors.filter(function(other) {
-      return other != actor;
-    });
-    if (!this.actors.some(function(actor) {
-      return actor.type == "coin";
-    })) {
-      this.status = "won";
-      this.finishDelay = 1;
-    }
-  }
-};
-*/
 
 //arrow key codes for readability
 var arrowCodes = {37: 'left', 38: 'up', 39: 'right', 40: 'down'};
