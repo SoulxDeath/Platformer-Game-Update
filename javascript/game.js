@@ -56,11 +56,12 @@ function Vector(x, y)
 //vector arithmetic: v_1 + v_2 = <x,y> + <a,b> = <x,a>, <y,b>
 Vector.prototype.plus = function(other)
 {
-    var addVector = new Vector();
+    var addVector = new Vector(0,0);
     addVector.x = this.x + other.x;
     addVector.y = this.y + other.y;
     return addVector;
 };
+
 //vector arithmetic: v_1 * factor = <x,y> * factor = <x * factor, y*factor>
 Vector.prototype.times = function(factor)
 {
@@ -70,8 +71,8 @@ Vector.prototype.times = function(factor)
 //A player has a size, speed and position
 function User(pos)
 {
-  this.pos = pos.plus(new Vector(0, -1.0));
-  this.size = new Vector(0.8, 1.0);
+  this.pos = pos.plus(new Vector(0, -0.5));
+  this.size = new Vector(0.8, 1.5);
   this.speed = new Vector(0,0);
 }
 User.prototype.type = 'user';
@@ -103,8 +104,8 @@ function DOMDisplay(parent, level)
 
   //update the world based on player position
   this.drawFrame();
-
 }
+
 //global
 var scale = 20;
 
@@ -128,21 +129,18 @@ DOMDisplay.prototype.drawBackground = function()
 };
 
 //draw the player agent
-DOMDisplay.prototype.drawUser = function ()
-{
-  //create a new container div for actor dom elements
-  var wrap = elt('div');
-  var actor = this.level.user;
-  var rect = elt('div', 'actor user');
-  rect = wrap.appendChild(rect);
-
-  rect.style.width = actor.size.x * scale + 'px';
-  rect.style.height = actor.size.y * scale + 'px';
-  rect.style.left = actor.pos.x * scale + 'px';
-  rect.style.right = actor.pos.y * scale + 'px';
-
+DOMDisplay.prototype.drawUser = function() {
+  var wrap = elt("div");
+  var actor = this.level.user
+  var rect = wrap.appendChild(elt("div",
+                                    "actor user"));
+    rect.style.width = actor.size.x * scale + "px";
+    rect.style.height = actor.size.y * scale + "px";
+    rect.style.left = actor.pos.x * scale + "px";
+    rect.style.top = actor.pos.y * scale + "px";
   return wrap;
 };
+
 
 DOMDisplay.prototype.drawFrame = function()
 {
@@ -151,6 +149,7 @@ DOMDisplay.prototype.drawFrame = function()
   this.actorLayer = this.wrap.appendChild(this.drawUser());
   this.scrollUserIntoView();
 };
+
 
 DOMDisplay.prototype.scrollUserIntoView = function()
 {
@@ -187,7 +186,9 @@ Level.prototype.obstacleAt = function(pos,size)
 
   if(xStart < 0 || xEnd >this.width || yStart < 0 || yEnd > this.height)
     return 'wall';
-  
+  if (yEnd > this.height)
+    return "lava";
+
   for(var y = yStart; y< yEnd; y++)
   {
     for(var x = xStart; x < xEnd; x++)
@@ -204,9 +205,9 @@ Level.prototype.obstacleAt = function(pos,size)
 // Update simulation each step based on keys & step size
 Level.prototype.animate = function(step, keys)
 {
-
   // Ensure each is maximum 100 milliseconds
-  while (step > 0) {
+  while (step > 0)
+  {
     var thisStep = Math.min(step, maxStep);
       this.user.act(thisStep, this, keys);
    // Do this by looping across the step size, subtracing either the
@@ -232,7 +233,7 @@ User.prototype.moveX = function(step, level, keys)
     this.pos = newPos;
 };
 
-var gravity = 30;
+var gravity = 50;
 var jumpSpeed = 17;
 var userYSpeed = 7;
 
@@ -242,10 +243,11 @@ User.prototype.moveY = function(step, level, keys)
   var motion = new Vector(0, this.speed.y * step);
   var newPos = this.pos.plus(motion);
   var obstacle = level.obstacleAt(newPos, this.size);
-  if(obstacle)
+  
+  if(obstacle == 'wall')
   {
   if (keys.up && this.speed.y > 0)
-    this.speed.y = -jumpspeed;
+    this.speed.y = -jumpSpeed;
   else
       this.speed.y = 0;
   }
@@ -253,13 +255,82 @@ User.prototype.moveY = function(step, level, keys)
   {
     this.pos = newPos;
   }
+
+  if (obstacle == "lava" && this.status == null)
+  {
+    this.status = "lost";
+    this.finishDelay = 1;
+  }
 };
 
 User.prototype.act = function(step, level, keys)
 {
   this.moveX(step, level, keys);
   this.moveY(step, level, keys);
+
+  // Losing animation
+  if (level.status == "lost") {
+    this.pos.y += step;
+    this.size.y -= step;
+  }
 };
+
+
+/*
+function Lava(pos, ch) {
+  this.pos = pos;
+  this.size = new Vector(1, 1);
+  if (ch == "=") {
+    this.speed = new Vector(2, 0);
+  } else if (ch == "|") {
+    this.speed = new Vector(0, 2);
+  } else if (ch == "v") {
+    this.speed = new Vector(0, 3);
+    this.repeatPos = pos;
+  }
+}
+Lava.prototype.type = "lava";
+
+Lava.prototype.act = function(step, level) {
+  var newPos = this.pos.plus(this.speed.times(step));
+  if (!level.obstacleAt(newPos, this.size))
+    this.pos = newPos;
+  else if (this.repeatPos)
+    this.pos = this.repeatPos;
+  else
+    this.speed = this.speed.times(-1);
+};
+
+
+Level.prototype.actorAt = function(actor) {
+  for (var i = 0; i < this.actors.length; i++) {
+    var other = this.actors[i];
+    if (other != actor &&
+        actor.pos.x + actor.size.x > other.pos.x &&
+        actor.pos.x < other.pos.x + other.size.x &&
+        actor.pos.y + actor.size.y > other.pos.y &&
+        actor.pos.y < other.pos.y + other.size.y)
+      return other;
+  }
+};
+
+Level.prototype.playerTouched = function(type, actor) {
+  if (type == "lava" && this.status == null) {
+    this.status = "lost";
+    this.finishDelay = 1;
+  } else if (type == "coin") {
+    this.actors = this.actors.filter(function(other) {
+      return other != actor;
+    });
+    if (!this.actors.some(function(actor) {
+      return actor.type == "coin";
+    })) {
+      this.status = "won";
+      this.finishDelay = 1;
+    }
+  }
+};
+*/
 
 //arrow key codes for readability
 var arrowCodes = {37: 'left', 38: 'up', 39: 'right', 40: 'down'};
@@ -336,10 +407,12 @@ function runLevel(level, Display)
     level.animate(step, arrows);
     display.drawFrame(step);
   });
+
   //display.actorLevel = display.wrap.append(display.drawUser());
 }
 
-function runGame(plans, Display){
+function runGame(plans, Display)
+{
   function startLevel(n)
   {
     //create an new level using the nth element in array plans
